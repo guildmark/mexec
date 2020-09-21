@@ -320,13 +320,13 @@ void getCommand(int argc, const char **argv) {
          }
          //Child process
          else if(pid == 0) {
-           //fprintf(stderr, "created child %d\n", getpid());
+           //fprintf(stderr, "created child %d from parent %d\n", getpid(), getppid());
            //Only one child
            if(commandCount == 1) {
              //fprintf(stderr, "Only 1 child... executing: %d\n", commandCount);
              //No redirecting needed, just execute
-             //fprintf(stderr, "one child, running command %s\n", command[i]);
-             runCommand(command[i], args, argCounter[i], i+1, indexJumper[i]);
+            fprintf(stderr, "Child %d running command %s\n", getpid(), command[i]);
+            runCommand(command[i], args, argCounter[i], i+1, indexJumper[i]);
            }
            //Close relevant pipes
            //First child, only redirect stdout
@@ -336,19 +336,22 @@ void getCommand(int argc, const char **argv) {
               for(int j = 0; j < commandCount-1; j++) {
               
                 if(j != i) {
-                  //fprintf(stderr, "Child %d closing pipe %d WRITE\n", getpid(), j);
+                  fprintf(stderr, "Child %d closing pipe %d WRITE\n", getpid(), j);
                   close(pipes[j][WRITE_END]);
                 }
-                //fprintf(stderr, "Child %d closing pipe %d READ\n", getpid(), j);
+                fprintf(stderr, "Child %d closing pipe %d READ\n", getpid(), j);
                 close(pipes[j][READ_END]);
               }
               //Redirect output to pipe and execute command
-              //fprintf(stderr, "Child %d redirecting output to pipe %d WRITE\n", getpid(), i);
-              dup2(pipes[i][WRITE_END], STDOUT_FILENO);
+              fprintf(stderr, "Child %d redirecting output to pipe %d WRITE\n", getpid(), i);
+              if(dup2(pipes[i][WRITE_END], STDOUT_FILENO) < 0){
+                perror("Error duplicating file descriptor");
+                exit(EXIT_FAILURE);
+              }
               //fprintf(stderr, "Running command [%s]...\n");
               //close(pipes[i][WRITE_END]);
 
-              //fprintf(stderr, "First child, running command %s\n", command[i]);
+              fprintf(stderr, "Child %d running command %s\n", getpid(), command[i]);
               runCommand(command[i], args, argCounter[i], i+1, indexJumper[i]);
               
            }
@@ -359,21 +362,25 @@ void getCommand(int argc, const char **argv) {
               for(int j = 0; j < commandCount-1; j++) {
                 
                 if(j != i-1) {
-                  //fprintf(stderr, "Child %d closing pipe %d READ\n", getpid(), j);
+                  fprintf(stderr, "Child %d closing pipe %d READ\n", getpid(), j);
                   close(pipes[j][READ_END]);
                 }
-                //fprintf(stderr, "Child %d closing pipe %d WRITE\n", getpid(), j);
+                fprintf(stderr, "Child %d closing pipe %d WRITE\n", getpid(), j);
                 close(pipes[j][WRITE_END]);
               }
              //dup2(pipes[i][WRITE_END], STDOUT_FILENO);
              //fprintf(stderr, "Child #%d, redirecting input to pipe %d READ...\n", i+1, i-1);
-             //fprintf(stderr, "Child %d redirecting input to pipe %d READ\n", getpid(), i-1);
-             dup2(pipes[i-1][READ_END], STDIN_FILENO);
+             fprintf(stderr, "Child %d redirecting input to pipe %d READ\n", getpid(), i-1);
+
+             if(dup2(pipes[i-1][READ_END], STDIN_FILENO) < 0 ) {
+              perror("Error duplicating file descriptor");
+              exit(EXIT_FAILURE);
+             }
              //fprintf(stderr, "Child #%d, executing command [%s]...\n", i+1, command[i]);
              //close(pipes[i-1][READ_END]);
 
              //Executes program
-             //fprintf(stderr, "Last child, running command %s\n", command[i]);
+             fprintf(stderr, "Child %d running command %s\n", getpid(), command[i]);
              runCommand(command[i], args, argCounter[i], i+1, indexJumper[i-1]);
 
            }
@@ -384,56 +391,75 @@ void getCommand(int argc, const char **argv) {
              for(int j = 0; j < commandCount-1; j++) {
                
                if(j != (i-1)) {
-                //fprintf(stderr, "Child %d (middle) closing pipe %d READ\n", getpid(), j);
+                fprintf(stderr, "Child %d (middle) closing pipe %d READ\n", getpid(), j);
                 close(pipes[j][READ_END]);
                }
                if(j != i) {
-                //fprintf(stderr, "Child %d (middle) closing pipe %d WRITE\n", getpid(), j);
+                fprintf(stderr, "Child %d (middle) closing pipe %d WRITE\n", getpid(), j);
                 close(pipes[j][WRITE_END]);
                }
                
              }
              //fprintf(stderr, "Child #%d, redirecting input to pipe %d READ and output to %d WRITE...\n", i+1, i-1, i);
-             //fprintf(stderr, "Child %d (middle) redirecting input to pipe %d READ\n", getpid(), i-1);
-             //fprintf(stderr, "Child %d (middle) redirecting output to pipe %d WRITE\n", getpid(), i);
-             dup2(pipes[i-1][READ_END], STDIN_FILENO);
-             dup2(pipes[i][WRITE_END], STDOUT_FILENO);
+             fprintf(stderr, "Child %d (middle) redirecting input to pipe %d READ\n", getpid(), i-1);
+             fprintf(stderr, "Child %d (middle) redirecting output to pipe %d WRITE\n", getpid(), i);
+
+             if(dup2(pipes[i-1][READ_END], STDIN_FILENO) < 0) {
+              perror("Error duplicating file descriptor");
+              exit(EXIT_FAILURE);
+             }
+             if(dup2(pipes[i][WRITE_END], STDOUT_FILENO) < 0) {
+              perror("Error duplicating file descriptor");
+              exit(EXIT_FAILURE);
+             }
              //fprintf(stderr, "Child #%d, executing command [%s]...\n", i+1, command[i]);
              //close(pipes[i][WRITE_END]);
              //close(pipes[i-1][READ_END]);
-            //fprintf(stderr, "Middle child, running command %s\n", command[i]);
+            fprintf(stderr, "Child %d running command %s\n", getpid(), command[i]);
             runCommand(command[i], args, argCounter[i], i+1, indexJumper[i-1]);
 
            }
          }
 
 
-      }
+       }
 
-      //Close all pipes
+          //Close all pipes in parent process
         for(int i = 0; i < commandCount-1; i++) {
-          //fprintf(stderr, "Closing pipe %d WRITE / READ in parent %d\n", i, getpid());
+          fprintf(stderr, "Closing pipe %d WRITE / READ in parent %d\n", i, getpid());
           close(pipes[i][READ_END]);
           close(pipes[i][WRITE_END]);
         }
 
+        int status;
+        int exitStatus = 0;
 
-      //Wait for child processes to finish
-      //waitProcesses(commandCount, pids);
-      /*
-      int exitStatus = waitProcesses(commandCount);
-      if(exitStatus == -1) {
-        //fprintf(stderr, "Child failed to exit correctly!\n");
-        exit(EXIT_FAILURE);
-      }
-      */
+        //Wait for all children
+        while ((pid=wait(&status)) != -1) {
+          fprintf(stderr, "Child %d exited exit status: %d\n", pid, WIFEXITED(status));
+          if(WIFEXITED(status) == 0) {
+            fprintf(stderr, "child %d exited wrong...\n", pid);
+            exitStatus++;
+          }
+          //exit(EXIT_FAILURE);
+          
+          //printf("Process %d terminated\n",pid);
+        }
+        if(exitStatus > 0) {
+          fprintf(stderr, "Child exited wrong, exiting %d...\n", exitStatus);
+          exit(EXIT_FAILURE);
+        }
       }
       //waitProcesses(commandCount, pids);
 
       //int temp = 0;
       //Wait for all children
-      int status;
-      while ((pid = wait(&status)) > 0);
+      //int status;
+      //while ((pid = wait(&status)) > 0);
+
+  
+
+       //fprintf(stderr, "Gone through all processes, 0 left");
        //fprintf(stderr, "Gone through all processes, 0 left");
 
       //Free memory
@@ -479,14 +505,14 @@ void runCommand(char *command, char **args, int numArgs, int child, int indexJum
     //fprintf(stderr, "Arg counter 0, running program\n");
     if(execvp(command, tempArg) < 0){
       //Exit with error message if failed
-      perror("Command failed");
+      perror("Execv error: ");
       exit(EXIT_FAILURE);
     }
   }
   else {
      if(execvp(command, arg) < 0){
       //Exit with error message if failed
-      perror("Command failed");
+      perror("Execv error: ");
       exit(EXIT_FAILURE);
     }
   }
