@@ -294,7 +294,8 @@ void getCommand(int argc, const char **argv) {
       exit(EXIT_FAILURE);
     }
 
-    pid_t pids[commandCount];  
+    //pid_t pids[commandCount];  
+    pid_t pid;
   
     //fprintf(stderr, "Creating pipes in parent %d\n", getpid());
     //Create enough pipes for all child processes to use
@@ -313,12 +314,12 @@ void getCommand(int argc, const char **argv) {
       //Create the forks
       for(int i = 0; i < commandCount; i++) {
          //If theres a problem forking, report error and exit
-         if((pids[i] = fork()) < 0) {
+         if((pid = fork()) < 0) {
           perror("Error creating fork!");
           exit(EXIT_FAILURE);
          }
          //Child process
-         else if(pids[i] == 0) {
+         else if(pid == 0) {
            //fprintf(stderr, "created child %d\n", getpid());
            //Only one child
            if(commandCount == 1) {
@@ -429,9 +430,10 @@ void getCommand(int argc, const char **argv) {
       }
       //waitProcesses(commandCount, pids);
 
-
-    //Wait for all children
-      waitProcesses(commandCount, pids);
+      //int temp = 0;
+      //Wait for all children
+      int status;
+      while ((pid = wait(&status)) > 0);
        //fprintf(stderr, "Gone through all processes, 0 left");
 
       //Free memory
