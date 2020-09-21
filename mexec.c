@@ -15,13 +15,15 @@
 /*
 * Author: Marcus Karlström
 * CS-user: c13mkm
-* Lab 1 for course Systemnära Programmering
-* Program: Skapar en pipeline för kommandon antingen från stdin eller från en fil
+* Lab 1 for course Systemnära Programmering HT20
+* Program: Creates a pipeline for commands written from stdin or from a file
 */
 
 int splitString(char *piece, char **args, int indexJump);
 void getCommand(int argc, const char **argv);
 void runCommand(char *command, char **args, int numArgs, int child, int indexJump);
+void waitProcesses(int comCount, pid_t *pids);
+void reallocMem(char **com, char **arg, int *argCount, int *indexJumper);
 void freeArray(char **arr, int count);
 int checkBlankLine(char line[MAX_LENGTH]);
 
@@ -36,7 +38,6 @@ int main(int argc, const char **argv) {
   getCommand(argc, argv);
 
   return 0;
- 
 }
 
 void getCommand(int argc, const char **argv) {
@@ -49,25 +50,25 @@ void getCommand(int argc, const char **argv) {
   //Allocate memory for commands and arguments  
   char **command = (char **) malloc(1024);
   char **args = (char **) malloc(1024);
-  int *argCounter = (int *) malloc(100*sizeof(int));
-  int *indexJumper = (int *) calloc(100, sizeof(int));
+  int *argCounter = (int *) malloc(10*sizeof(int));
+  int *indexJumper = (int *) calloc(10, sizeof(int));
 
 //Check memory allocation, exit if failed
   if(command == NULL) {
     perror("Error allocating memory!");
-    exit(0);
+    exit(EXIT_FAILURE);
   }
   if(args == NULL) {
     perror("Error allocating memory!");
-    exit(0);
+    exit(EXIT_FAILURE);
   }
   if(argCounter == NULL) {
     perror("Error allocating memory!");
-    exit(0);
+    exit(EXIT_FAILURE);
   }
   if(indexJumper == NULL) {
     perror("Error allocating memory!");
-    exit(0);
+    exit(EXIT_FAILURE);
   }
 
   //If no file, read from stdin
@@ -92,26 +93,35 @@ void getCommand(int argc, const char **argv) {
         //Allocate new memory for each new command
         command = (char **) realloc(command, (sizeof(command) + sizeof(char)*1024));
         args = (char **) realloc(args, (sizeof(args) + sizeof(char)*1024));
+
+        if(command == NULL) {
+          perror("Error reallocating memory for commands!");
+          exit(EXIT_FAILURE);
+        }
+        if(args == NULL) {
+          perror("Error allocating memory!");
+          exit(EXIT_FAILURE);
+        }
+
         //Reallocate more memory for arguments if needed
-        if(((argCount % 100) == 0)) {
+        if(((argCount % 10) == 0)) {
           argCounter = (int *) realloc(argCounter, sizeof(argCounter)*2);
           if( argCounter == NULL) {
             perror("Error reallocating memory!");
             exit(EXIT_FAILURE);
-          }
+          }  
         }
-        //Need command counter to know, use variable and while loop (???)
+        if(((indexJump % 10) == 0)) {
+          indexJumper = (int *) realloc(argCounter, sizeof(indexJumper)*2);
+          if( indexJumper == NULL) {
+            perror("Error reallocating memory!");
+            exit(EXIT_FAILURE);
+          }  
+        }
+
         
         //Check the memory allocation, exit if failed
 
-        if(command == NULL) {
-          perror("Error reallocating memory for commands!");
-          exit(1);
-        }
-        if(args == NULL) {
-          perror("Error allocating memory!");
-          exit(1);
-        }
         //Split the commands and arguments
         char *piece = strtok(line, " ");
         command[commandCount] = strdup(piece);
@@ -169,12 +179,12 @@ void getCommand(int argc, const char **argv) {
     //File stuff
     else if(argc == 2) {
 
-      FILE *in;
-      if(fopen(argv[1], "r") == NULL) {
-        perror(argv[1]);
+      FILE *in = fopen(argv[1], "r");
+      //If there is an error opening file, exit
+      if(in == NULL) {
+        perror("Error opening file");
         exit(EXIT_FAILURE);
       }
-      in = fopen(argv[1], "r");
 
       while(fgets(line, MAX_LENGTH, in) != NULL) {
       
@@ -194,26 +204,32 @@ void getCommand(int argc, const char **argv) {
         //Allocate new memory for each new command
         command = (char **) realloc(command, (sizeof(command) + sizeof(char)*1024));
         args = (char **) realloc(args, (sizeof(args) + sizeof(char)*1024));
+
+        //Check the memory allocation, exit if failed
+        if(command == NULL) {
+          perror("Error reallocating memory for commands!");
+          exit(EXIT_FAILURE);
+        }
+        if(args == NULL) {
+          perror("Error allocating memory!");
+          exit(EXIT_FAILURE);
+        }
         //Reallocate more memory for arguments if needed
-        if(((argCount % 100) == 0)) {
+        if(((argCount % 10) == 0)) {
           argCounter = (int *) realloc(argCounter, sizeof(argCounter)*2);
           if( argCounter == NULL) {
             perror("Error reallocating memory!");
             exit(EXIT_FAILURE);
           }
         }
-        //Need command counter to know, use variable and while loop (???)
-        
-        //Check the memory allocation, exit if failed
+        if(((indexJump % 10) == 0)) {
+          indexJumper = (int *) realloc(argCounter, sizeof(indexJumper)*2);
+          if( indexJumper == NULL) {
+            perror("Error reallocating memory!");
+            exit(EXIT_FAILURE);
+          }  
+        }
 
-        if(command == NULL) {
-          perror("Error reallocating memory for commands!");
-          exit(1);
-        }
-        if(args == NULL) {
-          perror("Error allocating memory!");
-          exit(1);
-        }
         //Split the commands and arguments
         char *piece = strtok(line, " ");
         command[commandCount] = strdup(piece);
@@ -240,6 +256,7 @@ void getCommand(int argc, const char **argv) {
 
       //TEST PRINTS - DELETE LATER
       /*
+    
             printf("indexJumper: ");
             for(int b = 0; b < 10; b++) {
                   printf("[%d]", indexJumper[b]);
@@ -266,12 +283,21 @@ void getCommand(int argc, const char **argv) {
       commandCount++;
       //printf("commandCount: %d\n", commandCount);
       }
+
+      //Close file when done
+      fclose(in);
           
+    }
+    //If too many arguments, exit the program
+    else {
+      fprintf(stderr, "Too many arguments!\n");
+      exit(EXIT_FAILURE);
     }
 
     //Create enough pipes for all child processes to use
     int pipes[commandCount-1][2];
     for(int i = 0; i < commandCount-1; i++) {
+       //Create pipes, exit with error if failure to do so
        if(pipe(pipes[i]) == -1) {
           perror("Error creating pipes!");
           exit(EXIT_FAILURE);
@@ -279,22 +305,30 @@ void getCommand(int argc, const char **argv) {
 
   }
     if(commandCount >= 1) {
+  
       pid_t pids[commandCount];  
-      int processes = commandCount;
-
+  
       //Create the forks
       for(int i = 0; i < commandCount; i++) {
          //If theres a problem forking, report error and exit
-         if((pids[i] = fork()) == -1) {
+         if((pids[i] = fork()) < 0) {
           perror("Error creating fork!");
           exit(EXIT_FAILURE);
          }
          //Child process
          else if(pids[i] == 0) {
+           fprintf(stderr, "created child %d\n", getpid());
+           //Only one child
+           if(commandCount == 1) {
+             //fprintf(stderr, "Only 1 child... executing: %d\n", commandCount);
+             //No redirecting needed, just execute
+             runCommand(command[i], args, argCounter[i], i+1, indexJumper[i]);
+           }
            //Close relevant pipes
            //First child, only redirect stdout
            if(i == 0) {
               //Close all relevant pipes
+               fprintf(stderr, "Child #%d is first, redirecting output...\n", getpid());
               for(int j = 0; j < commandCount-1; j++) {
               
                 if(j != i) {
@@ -310,7 +344,7 @@ void getCommand(int argc, const char **argv) {
            }
            //If last child, only redirent stdin
            else if(i == (commandCount-1)) {
-             //fprintf(stderr, "Child #%d, redirecting input...\n", commandCount);
+             fprintf(stderr, "Child #%d is last, redirecting input...\n", getpid());
              //Close all relevant pipes
               for(int j = 0; j < commandCount-1; j++) {
                 
@@ -333,7 +367,7 @@ void getCommand(int argc, const char **argv) {
 
            //Otherwise, redirect both input and output
            else {
-             //fprintf(stderr, "Child #%d, redirecting input and output...\n", i+1);
+             fprintf(stderr, "Child #%d is in between, redirecting input and output...\n", getpid());
              for(int j = 0; j < commandCount-1; j++) {
                
                if(j != (i-1)) {
@@ -356,36 +390,35 @@ void getCommand(int argc, const char **argv) {
            }
          }
 
+
        }
 
-      //Wait for children
       //Close all pipes
       for(int i = 0; i < commandCount-1; i++) {
         close(pipes[i][READ_END]);
         close(pipes[i][WRITE_END]);
       }
-      
-      int status;
-      //Wait for children to complete commands
-      while(processes > 0 ){
-         wait(&status);
-         //printf("Child with PID %ld exited with status 0x%x. \n", (long)temp_pid, status);
-         processes--;
-       }
-       
-      //printf("Freeing %d indexes from arg... \n", argCount);
+
+      //Wait for child processes to finish
+      waitProcesses(commandCount, pids);
+      /*
+      int exitStatus = waitProcesses(commandCount);
+      if(exitStatus == -1) {
+        //fprintf(stderr, "Child failed to exit correctly!\n");
+        exit(EXIT_FAILURE);
+      }
+      */
+      }
+
+      //Free memory
       freeArray(args, indexJump);
       freeArray(command, commandCount);
       free(argCounter);
       free(indexJumper);
-      }
     }
 
 
   
-  
-
-
 
 /*
 * Function: runCommand
@@ -401,6 +434,7 @@ void runCommand(char *command, char **args, int numArgs, int child, int indexJum
       arg[k] = strdup(args[k]);
     }
   }
+  //Jump to the relevant argument in the array and use that
   else {
     int temp = 0;
     for(int k = indexJump; k <= (indexJump+numArgs)-1; k++) {     
@@ -411,14 +445,27 @@ void runCommand(char *command, char **args, int numArgs, int child, int indexJum
   }
 
   arg[numArgs] = NULL;
-  char *tempArg[] = {"", NULL};
+  //If only one argument, use command as argument
+  char *tempArg[] = {command, NULL};
+
+  //Execute command
   if(numArgs == 1) {
     //fprintf(stderr, "Arg counter 0, running program\n");
-    execvp(command, tempArg);
+    if(execvp(command, tempArg) < 0){
+      //Exit with error message if failed
+      perror("Command failed");
+      exit(EXIT_FAILURE);
+    }
   }
-  //Execute command
+  else {
+     if(execvp(command, arg) < 0){
+      //Exit with error message if failed
+      perror("Command failed");
+      exit(EXIT_FAILURE);
+    }
+  }
+
   //fprintf(stderr, "Executing command %s with args [%s] [%s] [%s]... \n", command[i], arg[0], arg[1], arg[2]);
-  execvp(command, arg);
 }
 
 
@@ -455,12 +502,43 @@ int checkBlankLine(char line[MAX_LENGTH]) {
   return 1;
 }
 /*
-* freeArray: Takes an array and goes through to free the indexes aswell as the array itself
-*
+* waitProcesses
+* Makes parent process wait for each child until it completes and checks its exit status, if a child has exited abnormaly, exit
+* */
+void waitProcesses(int comCount, pid_t *pids) {
+      int status;
+      int processes = comCount;
+      int temp = 0;
+      //Wait for children to complete commands
+      while(processes > 0){
+
+        if(waitpid(pids[temp], &status, 0) != -1) {
+          if(!WIFEXITED(status)) {
+           fprintf(stderr, "child %d exits with failure status %d, processes left: %d..\n", pids[temp], WIFEXITED(status), processes);
+           exit(EXIT_FAILURE);
+         }
+        }
+        else {
+          perror("wait failed!");
+          exit(EXIT_FAILURE);
+        }
+         //fprintf(stderr, "Parent signing off, child exited with status %d \n", status);
+         //Check child processes and if they exited incorrectly, exit with error
+         temp++;
+         processes--;
+       }
+       fprintf(stderr, "Gone through all processes, %d left", processes);
+       
+}
+/*
+* freeArray
+* Takes an array and goes through to free the indexes aswell as the array itself
 * */
 void freeArray(char **arr, int count) {
-   for(int i = 0; i < count; i++) {
-      free(arr[i]);
-    }
-    free(arr);
+  //Go through each index and free
+  for(int i = 0; i < count; i++) {
+    free(arr[i]);
+  }
+  //Free the array itself
+  free(arr);
 }
