@@ -294,6 +294,9 @@ void getCommand(int argc, const char **argv) {
       exit(EXIT_FAILURE);
     }
 
+    pid_t pids[commandCount];  
+  
+    fprintf(stderr, "Creating pipes in parent %d\n", getpid());
     //Create enough pipes for all child processes to use
     int pipes[commandCount-1][2];
     for(int i = 0; i < commandCount-1; i++) {
@@ -306,8 +309,7 @@ void getCommand(int argc, const char **argv) {
   }
     if(commandCount >= 1) {
   
-      pid_t pids[commandCount];  
-  
+
       //Create the forks
       for(int i = 0; i < commandCount; i++) {
          //If theres a problem forking, report error and exit
@@ -322,85 +324,104 @@ void getCommand(int argc, const char **argv) {
            if(commandCount == 1) {
              //fprintf(stderr, "Only 1 child... executing: %d\n", commandCount);
              //No redirecting needed, just execute
+             fprintf(stderr, "one child, running command %s\n", command[i]);
              runCommand(command[i], args, argCounter[i], i+1, indexJumper[i]);
            }
            //Close relevant pipes
            //First child, only redirect stdout
            if(i == 0) {
               //Close all relevant pipes
-               fprintf(stderr, "Child #%d is first, redirecting output...\n", getpid());
+              //fprintf(stderr, "Child #%d is first, redirecting output...\n", getpid());
               for(int j = 0; j < commandCount-1; j++) {
               
                 if(j != i) {
+                  fprintf(stderr, "Child %d closing pipe %d WRITE\n", getpid(), j);
                   close(pipes[j][WRITE_END]);
                 }
+                fprintf(stderr, "Child %d closing pipe %d READ\n", getpid(), j);
                 close(pipes[j][READ_END]);
               }
               //Redirect output to pipe and execute command
+              fprintf(stderr, "Child %d redirecting output to pipe %d WRITE\n", getpid(), i);
               dup2(pipes[i][WRITE_END], STDOUT_FILENO);
-
+              //fprintf(stderr, "Running command [%s]...\n");
+              //close(pipes[i][WRITE_END]);
+              
+              fprintf(stderr, "First child, running command %s\n", command[i]);
               runCommand(command[i], args, argCounter[i], i+1, indexJumper[i]);
               
            }
            //If last child, only redirent stdin
            else if(i == (commandCount-1)) {
-             fprintf(stderr, "Child #%d is last, redirecting input...\n", getpid());
+             //fprintf(stderr, "Child #%d is last, redirecting input...\n", getpid());
              //Close all relevant pipes
               for(int j = 0; j < commandCount-1; j++) {
                 
                 if(j != i-1) {
-                  //fprintf(stderr, "Child %d closing pipe %d READ\n", i+1, j);
+                  fprintf(stderr, "Child %d closing pipe %d READ\n", getpid(), j);
                   close(pipes[j][READ_END]);
                 }
-                //fprintf(stderr, "Child %d closing pipe %d WRITE\n", i+1, j);
+                fprintf(stderr, "Child %d closing pipe %d WRITE\n", getpid(), j);
                 close(pipes[j][WRITE_END]);
               }
              //dup2(pipes[i][WRITE_END], STDOUT_FILENO);
              //fprintf(stderr, "Child #%d, redirecting input to pipe %d READ...\n", i+1, i-1);
+             fprintf(stderr, "Child %d redirecting input to pipe %d READ\n", getpid(), i-1);
              dup2(pipes[i-1][READ_END], STDIN_FILENO);
              //fprintf(stderr, "Child #%d, executing command [%s]...\n", i+1, command[i]);
-             
+             //close(pipes[i-1][READ_END]);
+
              //Executes program
+             fprintf(stderr, "Last child, running command %s\n", command[i]);
              runCommand(command[i], args, argCounter[i], i+1, indexJumper[i-1]);
 
            }
 
            //Otherwise, redirect both input and output
            else {
-             fprintf(stderr, "Child #%d is in between, redirecting input and output...\n", getpid());
+             //fprintf(stderr, "Child #%d is in between, redirecting input and output...\n", getpid());
              for(int j = 0; j < commandCount-1; j++) {
                
                if(j != (i-1)) {
-                //fprintf(stderr, "Child %d closing pipe %d READ\n", i+1, j);
+                fprintf(stderr, "Child %d (middle) closing pipe %d READ\n", getpid(), j);
                 close(pipes[j][READ_END]);
                }
                if(j != i) {
-                 //fprintf(stderr, "Child %d closing pipe %d WRITE\n", i+1, j);
+                fprintf(stderr, "Child %d (middle) closing pipe %d WRITE\n", getpid(), j);
                 close(pipes[j][WRITE_END]);
                }
                
              }
              //fprintf(stderr, "Child #%d, redirecting input to pipe %d READ and output to %d WRITE...\n", i+1, i-1, i);
+             fprintf(stderr, "Child %d (middle) redirecting input to pipe %d READ\n", getpid(), i-1);
+             fprintf(stderr, "Child %d (middle) redirecting output to pipe %d WRITE\n", getpid(), i);
              dup2(pipes[i-1][READ_END], STDIN_FILENO);
              dup2(pipes[i][WRITE_END], STDOUT_FILENO);
              //fprintf(stderr, "Child #%d, executing command [%s]...\n", i+1, command[i]);
-
-             runCommand(command[i], args, argCounter[i], i+1, indexJumper[i-1]);
+             //close(pipes[i][WRITE_END]);
+             //close(pipes[i-1][READ_END]);
+            fprintf(stderr, "Middle child, running command %s\n", command[i]);
+            runCommand(command[i], args, argCounter[i], i+1, indexJumper[i-1]);
 
            }
          }
 
 
-       }
-
-      //Close all pipes
-      for(int i = 0; i < commandCount-1; i++) {
-        close(pipes[i][READ_END]);
-        close(pipes[i][WRITE_END]);
       }
 
+      //Close all pipes
+        for(int i = 0; i < commandCount-1; i++) {
+          fprintf(stderr, "Closing pipe %d WRITE / READ in parent %d\n", i, getpid());
+          close(pipes[i][READ_END]);
+          close(pipes[i][WRITE_END]);
+        }
+
+
       //Wait for child processes to finish
-      waitProcesses(commandCount, pids);
+      //waitProcesses(commandCount, pids);
+
+
+
       /*
       int exitStatus = waitProcesses(commandCount);
       if(exitStatus == -1) {
@@ -409,6 +430,28 @@ void getCommand(int argc, const char **argv) {
       }
       */
       }
+      //waitProcesses(commandCount, pids);
+            int status;
+      int temp = 0;
+
+    //Wait for all children
+     for(int i = 0; i < comCount; i++) {
+       fprintf(stderr, "Waiting for child %d to exit...\n", pids[temp]);
+        if(waitpid(pids[temp], &status, 0) != -1) {
+          if(!WIFEXITED(status)) {
+           fprintf(stderr, "child %d exits with failure status %d..\n", pids[temp], WIFEXITED(status));
+           exit(EXIT_FAILURE);
+         }
+        }
+        else {
+          perror("wait failed!");
+          exit(EXIT_FAILURE);
+        }
+         //fprintf(stderr, "Parent signing off, child exited with status %d \n", status);
+         //Check child processes and if they exited incorrectly, exit with error
+         temp++;
+       }
+       fprintf(stderr, "Gone through all processes, 0 left");
 
       //Free memory
       freeArray(args, indexJump);
@@ -507,14 +550,14 @@ int checkBlankLine(char line[MAX_LENGTH]) {
 * */
 void waitProcesses(int comCount, pid_t *pids) {
       int status;
-      int processes = comCount;
       int temp = 0;
-      //Wait for children to complete commands
-      while(processes > 0){
 
+    //Wait for all children
+     for(int i = 0; i < comCount; i++) {
+       fprintf(stderr, "Waiting for child %d to exit...\n", pids[temp]);
         if(waitpid(pids[temp], &status, 0) != -1) {
           if(!WIFEXITED(status)) {
-           fprintf(stderr, "child %d exits with failure status %d, processes left: %d..\n", pids[temp], WIFEXITED(status), processes);
+           fprintf(stderr, "child %d exits with failure status %d..\n", pids[temp], WIFEXITED(status));
            exit(EXIT_FAILURE);
          }
         }
@@ -525,9 +568,8 @@ void waitProcesses(int comCount, pid_t *pids) {
          //fprintf(stderr, "Parent signing off, child exited with status %d \n", status);
          //Check child processes and if they exited incorrectly, exit with error
          temp++;
-         processes--;
        }
-       fprintf(stderr, "Gone through all processes, %d left", processes);
+       fprintf(stderr, "Gone through all processes, 0 left");
        
 }
 /*
